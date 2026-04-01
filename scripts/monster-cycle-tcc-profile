@@ -1,0 +1,24 @@
+#!/usr/bin/env python3
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from monster_tcc_common import cycle_to_next_profile, notify
+
+
+def main():
+    next_profile = cycle_to_next_profile()
+    next_name = next_profile.get("name", next_profile.get("id", "Unknown profile"))
+    print(next_name)
+    notify("Power profile changed", next_name)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as exc:
+        message = f"monster-cycle-tcc-profile: {exc}"
+        print(message, file=sys.stderr)
+        notify("Power profile change failed", str(exc))
+        sys.exit(1)

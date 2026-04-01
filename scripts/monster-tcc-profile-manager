@@ -1,0 +1,400 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import gi
+
+gi.require_version("Gtk", "4.0")
+gi.require_version("Adw", "1")
+
+from gi.repository import Adw, Gio, GLib, Gtk
+
+from monster_tcc_common import (
+    CONFIG_PATH,
+    get_active_profile,
+    get_profiles,
+    load_cycle_profiles,
+    notify,
+    save_cycle_profiles,
+    set_profile_by_id,
+)
+
+
+class ProfileRow(Gtk.ListBoxRow):
+    def __init__(self, manager: "ProfileManagerWindow", entry: dict):
+        super().__init__()
+        self.manager = manager
+        self.entry = dict(entry)
+
+        outer = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        outer.set_margin_top(10)
+        outer.set_margin_bottom(10)
+        outer.set_margin_start(14)
+        outer.set_margin_end(14)
+
+        self.enabled = Gtk.CheckButton()
+        self.enabled.set_valign(Gtk.Align.CENTER)
+        self.enabled.set_active(bool(self.entry.get("enabled", True)))
+        self.enabled.connect("toggled", self._on_enabled_toggled)
+        outer.append(self.enabled)
+
+        text_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        text_box.set_hexpand(True)
+
+        top_line = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        self.title = Gtk.Label(xalign=0)
+        self.title.set_hexpand(True)
+        self.title.add_css_class("title-4")
+        top_line.append(self.title)
+
+        self.badge = Gtk.Label()
+        self.badge.add_css_class("caption")
+        self.badge.add_css_class("accent")
+        top_line.append(self.badge)
+
+        self.description = Gtk.Label(xalign=0)
+        self.description.set_wrap(True)
+        self.description.add_css_class("dim-label")
+
+        self.meta = Gtk.Label(xalign=0)
+        self.meta.add_css_class("caption")
+        self.meta.add_css_class("dim-label")
+
+        text_box.append(top_line)
+        text_box.append(self.description)
+        text_box.append(self.meta)
+        outer.append(text_box)
+
+        button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        button_box.set_valign(Gtk.Align.CENTER)
+
+        self.up_button = Gtk.Button(icon_name="go-up-symbolic")
+        self.up_button.set_tooltip_text("Move up")
+        self.up_button.connect("clicked", self._on_move_up)
+        button_box.append(self.up_button)
+
+        self.down_button = Gtk.Button(icon_name="go-down-symbolic")
+        self.down_button.set_tooltip_text("Move down")
+        self.down_button.connect("clicked", self._on_move_down)
+        button_box.append(self.down_button)
+
+        self.activate_button = Gtk.Button(label="Activate")
+        self.activate_button.add_css_class("pill")
+        self.activate_button.connect("clicked", self._on_activate)
+        button_box.append(self.activate_button)
+
+        outer.append(button_box)
+        self.set_child(outer)
+        self.refresh_visuals(None)
+
+    def _on_enabled_toggled(self, _button: Gtk.CheckButton) -> None:
+        self.entry["enabled"] = self.enabled.get_active()
+        self.manager.mark_dirty()
+        self.refresh_visuals(self.manager.active_profile_id)
+
+    def _on_move_up(self, _button: Gtk.Button) -> None:
+        self.manager.move_row(self, -1)
+
+    def _on_move_down(self, _button: Gtk.Button) -> None:
+        self.manager.move_row(self, 1)
+
+    def _on_activate(self, _button: Gtk.Button) -> None:
+        self.manager.activate_profile(self.entry["id"])
+
+    def refresh_visuals(self, active_profile_id: str | None) -> None:
+        profile_name = self.entry.get("name", self.entry["id"])
+        self.title.set_text(profile_name)
+
+        description = self.entry.get("description") or "No description"
+        self.description.set_text(description)
+
+        tags = []
+        if self.entry["id"] == active_profile_id:
+            tags.append("Active")
+        if self.entry.get("enabled", True):
+            tags.append("In cycle")
+        else:
+            tags.append("Skipped")
+        self.badge.set_text(" · ".join(tags))
+        self.meta.set_text(self.entry["id"])
+
+        is_active = self.entry["id"] == active_profile_id
+        self.activate_button.set_sensitive(not is_active)
+        self.up_button.set_sensitive(True)
+        self.down_button.set_sensitive(True)
+
+
+class ProfileManagerWindow(Adw.ApplicationWindow):
+    def __init__(self, app: Adw.Application):
+        super().__init__(application=app, title="Monster TCC Profile Order")
+        self.set_default_size(860, 620)
+
+        self.active_profile_id: str | None = None
+        self.dirty = False
+        self.rows: list[ProfileRow] = []
+
+        header = Adw.HeaderBar()
+        self.refresh_button = Gtk.Button(icon_name="view-refresh-symbolic")
+        self.refresh_button.set_tooltip_text("Reload profiles from TCC")
+        self.refresh_button.connect("clicked", self._on_refresh_clicked)
+        header.pack_start(self.refresh_button)
+
+        self.save_button = Gtk.Button(label="Save Order")
+        self.save_button.add_css_class("suggested-action")
+        self.save_button.connect("clicked", self._on_save_clicked)
+        header.pack_end(self.save_button)
+
+        self.cycle_button = Gtk.Button(label="Cycle Once")
+        self.cycle_button.connect("clicked", self._on_cycle_clicked)
+        header.pack_end(self.cycle_button)
+
+        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+
+        toolbar_view = Adw.ToolbarView()
+        toolbar_view.add_top_bar(header)
+        content.append(toolbar_view)
+
+        body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
+        body.set_margin_top(18)
+        body.set_margin_bottom(18)
+        body.set_margin_start(18)
+        body.set_margin_end(18)
+
+        hero = Adw.Clamp()
+        hero.set_maximum_size(980)
+
+        hero_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+
+        title = Gtk.Label(xalign=0)
+        title.set_markup("<span size='xx-large' weight='700'>Power Profile Cycle</span>")
+
+        subtitle = Gtk.Label(xalign=0)
+        subtitle.set_wrap(True)
+        subtitle.add_css_class("dim-label")
+        subtitle.set_text(
+            "TCC profilleri canlı olarak okunur. Buradaki sıra, fiziksel profil tuşunun "
+            "döngü sırasını belirler. İşaretini kaldırdığın profiller döngüye dahil edilmez."
+        )
+
+        self.status_label = Gtk.Label(xalign=0)
+        self.status_label.add_css_class("accent")
+
+        self.config_label = Gtk.Label(xalign=0)
+        self.config_label.add_css_class("caption")
+        self.config_label.add_css_class("dim-label")
+        self.config_label.set_text(f"Config: {CONFIG_PATH}")
+
+        hero_box.append(title)
+        hero_box.append(subtitle)
+        hero_box.append(self.status_label)
+        hero_box.append(self.config_label)
+        hero.set_child(hero_box)
+        body.append(hero)
+
+        list_frame = Gtk.Frame()
+        list_frame.add_css_class("view")
+        list_frame.set_hexpand(True)
+        list_frame.set_vexpand(True)
+        list_frame.set_size_request(-1, 320)
+
+        self.listbox = Gtk.ListBox()
+        self.listbox.set_selection_mode(Gtk.SelectionMode.NONE)
+        self.listbox.add_css_class("boxed-list")
+        self.listbox.set_hexpand(True)
+        self.listbox.set_vexpand(True)
+        self.placeholder = Gtk.Label()
+        self.placeholder.set_wrap(True)
+        self.placeholder.set_xalign(0)
+        self.placeholder.set_margin_top(18)
+        self.placeholder.set_margin_bottom(18)
+        self.placeholder.set_margin_start(18)
+        self.placeholder.set_margin_end(18)
+        self.placeholder.add_css_class("dim-label")
+        self.placeholder.set_text("No profiles loaded yet.")
+        self.listbox.set_placeholder(self.placeholder)
+        list_frame.set_child(self.listbox)
+        body.append(list_frame)
+
+        footer = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        footer.set_halign(Gtk.Align.FILL)
+
+        hint = Gtk.Label(xalign=0)
+        hint.set_hexpand(True)
+        hint.set_wrap(True)
+        hint.add_css_class("dim-label")
+        hint.set_text("Shortcut: Super+Alt+F6. Use Refresh when you add, remove or rename TCC profiles.")
+        footer.append(hint)
+
+        self.unsaved_label = Gtk.Label()
+        self.unsaved_label.add_css_class("caption")
+        footer.append(self.unsaved_label)
+        body.append(footer)
+
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scroll.set_child(body)
+
+        toolbar_view.set_content(scroll)
+        self.set_content(content)
+
+        self._load_profiles()
+        GLib.timeout_add_seconds(5, self._poll_active_profile)
+
+    def _set_status(self, message: str) -> None:
+        self.status_label.set_text(message)
+
+    def _set_unsaved(self, dirty: bool) -> None:
+        self.dirty = dirty
+        self.save_button.set_sensitive(dirty)
+        self.unsaved_label.set_text("Unsaved changes" if dirty else "Saved")
+
+    def mark_dirty(self) -> None:
+        self._set_unsaved(True)
+        self._update_active_state()
+
+    def _clear_rows(self) -> None:
+        while True:
+            child = self.listbox.get_first_child()
+            if child is None:
+                break
+            self.listbox.remove(child)
+        self.rows = []
+
+    def _load_profiles(self) -> None:
+        try:
+            entries = load_cycle_profiles()
+            self._clear_rows()
+            for entry in entries:
+                row = ProfileRow(self, entry)
+                self.rows.append(row)
+                self.listbox.append(row)
+            self._update_active_state()
+            self._set_unsaved(False)
+            if self.rows:
+                self._set_status(f"{len(self.rows)} profiles loaded from TCC")
+            else:
+                self._set_status("TCC returned no profiles")
+                self.placeholder.set_text("TCC returned no profiles. Press Refresh after checking that tccd is running.")
+        except Exception as exc:
+            self._clear_rows()
+            self._set_unsaved(False)
+            self._set_status(f"Could not load profiles: {exc}")
+            self.placeholder.set_text(
+                "Could not load profiles from TCC.\n"
+                f"Error: {exc}"
+            )
+
+    def _collect_entries(self) -> list[dict]:
+        return [dict(row.entry) for row in self.rows]
+
+    def _update_active_state(self) -> None:
+        try:
+            active = get_active_profile()
+            self.active_profile_id = active.get("id")
+            active_name = active.get("name", self.active_profile_id or "Unknown")
+            self._set_status(f"Active profile: {active_name}")
+        except Exception as exc:
+            self.active_profile_id = None
+            self._set_status(f"Could not read active profile: {exc}")
+
+        for row in self.rows:
+            row.refresh_visuals(self.active_profile_id)
+
+    def move_row(self, row: ProfileRow, delta: int) -> None:
+        current_index = self.rows.index(row)
+        new_index = current_index + delta
+        if new_index < 0 or new_index >= len(self.rows):
+            return
+
+        self.rows.pop(current_index)
+        self.rows.insert(new_index, row)
+
+        self.listbox.remove(row)
+        self.listbox.insert(row, new_index)
+        self.mark_dirty()
+
+    def activate_profile(self, profile_id: str) -> None:
+        try:
+            if not set_profile_by_id(profile_id):
+                raise RuntimeError("TCC returned false")
+            self._update_active_state()
+            name = next((row.entry.get("name", profile_id) for row in self.rows if row.entry["id"] == profile_id), profile_id)
+            notify("Power profile changed", name)
+        except Exception as exc:
+            self._set_status(f"Could not activate profile: {exc}")
+
+    def _on_refresh_clicked(self, _button: Gtk.Button) -> None:
+        if self.dirty:
+            self._set_status("Save or discard your changes before refreshing.")
+            return
+        self._load_profiles()
+
+    def _on_save_clicked(self, _button: Gtk.Button) -> None:
+        try:
+            save_cycle_profiles(self._collect_entries())
+            self._set_unsaved(False)
+            self._set_status("Cycle order saved")
+        except Exception as exc:
+            self._set_status(f"Could not save order: {exc}")
+
+    def _on_cycle_clicked(self, _button: Gtk.Button) -> None:
+        try:
+            if self.dirty:
+                save_cycle_profiles(self._collect_entries())
+                self._set_unsaved(False)
+            profile_id = None
+            for row in self.rows:
+                if row.entry.get("enabled", True) and row.entry["id"] == self.active_profile_id:
+                    profile_id = row.entry["id"]
+                    break
+
+            enabled = [row.entry for row in self.rows if row.entry.get("enabled", True)]
+            if not enabled:
+                raise RuntimeError("No enabled profiles in cycle order")
+
+            if profile_id is None:
+                next_entry = enabled[0]
+            else:
+                current_index = next(i for i, entry in enumerate(enabled) if entry["id"] == profile_id)
+                next_entry = enabled[(current_index + 1) % len(enabled)]
+
+            self.activate_profile(next_entry["id"])
+        except Exception as exc:
+            self._set_status(f"Could not cycle profile: {exc}")
+
+    def _poll_active_profile(self) -> bool:
+        self._update_active_state()
+        if not self.dirty:
+            try:
+                current_ids = {profile.get("id") for profile in get_profiles() if profile.get("id")}
+                listed_ids = {row.entry["id"] for row in self.rows}
+                if current_ids != listed_ids:
+                    self._load_profiles()
+            except Exception:
+                pass
+        return True
+
+
+class ProfileManagerApp(Adw.Application):
+    def __init__(self):
+        super().__init__(application_id="com.deniz.MonsterTccProfileManager", flags=Gio.ApplicationFlags.FLAGS_NONE)
+
+    def do_activate(self) -> None:
+        window = self.props.active_window
+        if window is None:
+            window = ProfileManagerWindow(self)
+        window.present()
+
+
+def main() -> int:
+    Adw.init()
+    app = ProfileManagerApp()
+    return app.run(sys.argv)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

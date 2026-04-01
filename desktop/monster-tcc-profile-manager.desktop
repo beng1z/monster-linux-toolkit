@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Monster TCC Profile Manager
+GenericName=Power Profile Manager
+Comment=Manage the hardware profile key cycle order for TUXEDO Control Center
+Exec=monster-tcc-profile-manager
+Icon=preferences-system
+Terminal=false
+Categories=Utility;
+Keywords=monster;tuxedo;power;profile;fan;laptop;
+NoDisplay=false
+StartupNotify=true
