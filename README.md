@@ -1,73 +1,24 @@
-# Monster Tulpar T5 V21.5 Linux Toolkit
+# Monster Tulpar T5 V21.5 Fedora Rehberi
 
-Bu depo, `MONSTER / TULPAR T5 V21.5` da spesifik olarak Fedora kullanırken deneyimlediğim sorunlar için kendi çözümlerimi paylaşacağım.
+Bu depo, `MONSTER / TULPAR T5 V21.5` üzerinde Fedora kullanırken ihtiyaç duyduğum kurulum adımlarını ve kendi yardımcı araçlarımı toplar.
 
-Temel bileşenlerimiz:
+Bu repo özellikle şunlara odaklanır:
 
-- `TUXEDO Control Center` ile güç/fan kontrolü 
-- `OpenRGB` ile RGB klavye ve lightbarın kontrolü
-- fiziksel profil tuşunu Linux'ta tekrar kullanılır hale getirmek için kendi scriptim
-- windows hello donanımını çalıştırmak için howdy
+- `NVIDIA` sürücüsü kurulumu
+- `TUXEDO Control Center` ve `tuxedo-drivers`
+- `OpenRGB`
+- `Howdy`
+- fiziksel profil tuşunu Linux'ta tekrar kullanılır hale getirmek
 
-## Bu repoda kiler:
+Ana içerik bu rehberdir:
+
+- [docs/monster-linux-guide.md](docs/monster-linux-guide.md)
+
+Repo içindeki ek araçlar:
 
 - `scripts/monster-cycle-tcc-profile`
-  TUXEDO Control Center profillerini D-Bus üzerinden sırayla değiştirir.
 - `scripts/monster-tcc-profile-manager`
-  Fiziksel profil tuşunun dolaştığı profil sırasını düzenlemek için GTK/libadwaita arayüzü.
 - `scripts/monster_tcc_common.py`
-  Ortak D-Bus ve yapılandırma mantığı.
-- `desktop/monster-tcc-profile-manager.desktop`
-  Uygulama menüsü kısayolu.
-- `docs/monster-linux-guide.md`
-  `Monster Tulpar T5 V21.5` için Linux kullanım rehberi.
 - `install.sh`
-  Scriptleri ve masaüstü dosyasını kullanıcı dizinine kurar.
 
-## Bu neden gerekli
-
-Bu laptopta fiziksel profil tuşu Linux tarafından görülebiliyor, ama Windows'taki monster control center yazılımı davranışı Fedora üzerinde kendiliğinden gelmiyor.
-
-Bu depodaki araçlar şu işi çözüyor:
-
-- fiziksel profil tuşunu tekrar işe yarar hale getirmek
-- Guç profillerini fiziksel tuşa ile değiştirme sırasını kullanıcı dostu bir arayüzden ayarlamak
-- kurulumu kullanıcı dizininde, hafif ve sade tutmak
-
-## Kendi test ortamım
-
-- Fedora Linux
-- GNOME Wayland
-- çalışan `tccd` servisi
-- `busctl`
-- Python 3
-- GTK 4 / libadwaita Python bağları
-
-## Kurulum
-
-```bash
-git clone https://github.com/beng1z/monster-linux-toolkit.git
-cd monster-linux-toolkit
-./install.sh
-```
-
-Kurulumdan sonra:
-
-- GNOME uygulama menüsünden `Monster TCC Profile Manager` aç
-- profil sırasını istediğin gibi düzenle
-- kaydet
-- fiziksel profil tuşuna basarak profiller arasında geç
-
-## Notlar
-
-- Bu kurgu güç/fan tarafında `TUXEDO Control Center`, ışık tarafında `OpenRGB` mantığıyla hazırlanmıştır.
-- Bu makinede `TuneD`, TCC ile çakıştığı için maskelenmiş olmalıdır.
-- Windows'taki ayrı beyaz profil gösterge LED'leri bu donanımda Linux tarafında `sysfs`, `tccd` veya `OpenRGB` üzerinden görünmüyor.
-- Linux'ta görünen RGB cihazlar klavye ve RGB lightbar ile sınırlı.
-
-## Kaynaklar
-
-- Howdy resmi repo: https://github.com/boltgolt/howdy
-- Fedora 42 Howdy paketleme sorunu: https://github.com/boltgolt/howdy/issues/1018
-- Howdy KDE/SDDM davranışı: https://github.com/boltgolt/howdy/issues/843
-- TUXEDO klavye güç modu LED tartışması: https://github.com/tuxedocomputers/tuxedo-keyboard/issues/86
+Bu araçlar rehberin tamamlayıcısıdır. Reponun ana amacı sıfırdan kurulum rehberi sunmaktır.

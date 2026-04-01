@@ -1,111 +1,189 @@
-# Monster Tulpar T5 V21.5 Linux Rehberi
+# Monster Tulpar T5 V21.5 Fedora 42 Kurulum Rehberi
 
-Bu rehber doğrudan şu makine üzerinden hazırlanmıştır:
+Bu rehber, doğrudan şu makineye göre yazılmıştır:
 
 - Üretici: `MONSTER`
 - Model: `TULPAR T5 V21.5`
-- Dağıtım: Fedora
+- GPU: `Intel UHD Graphics + NVIDIA GeForce RTX 3070 Mobile / Max-Q`
+- Wi-Fi: `Intel CNVi`
+- Ethernet: `Realtek RTL8125 2.5GbE`
 
-Bu yüzden genel Linux tavsiyesinden çok, bu modelde gerçekten karşıma çıkan pratik durumlara odaklanır.
+Hedef:
 
-## Önerdiğim genel kurgu
+- sıfırdan Fedora kurulduktan sonra sistemi günlük kullanıma hazır hale getirmek
+- güç profilleri, fan kontrolü, ekran kartı sürücüleri ve yüz tanıma tarafını toparlamak
 
-Her işi tek bir araç yapsın:
+## 1. Fedora kurulumundan hemen sonra
 
-- Güç ve fan: `TUXEDO Control Center`
-- RGB klavye ve RGB bar: `OpenRGB`
-- Özel davranışlar ve entegrasyon: küçük yerel scriptler
-
-Aynı anda iki farklı güç yöneticisinin sistemi çekiştirmesine izin verme.
-
-## TUXEDO Control Center
-
-Bu makinede gözlediğim durum:
-
-- `tccd` çalışıyor
-- sistem D-Bus üzerinde `com.tuxedocomputers.tccd` arayüzünü açıyor
-- profiller okunabiliyor ve değiştirilebiliyor
-- fiziksel profil tuşu Linux'ta görülüyor
-
-Kontrol etmek için:
+Önce sistemi tamamen güncelle:
 
 ```bash
-systemctl is-active tccd.service
-busctl --system introspect com.tuxedocomputers.tccd /com/tuxedocomputers/tccd
+sudo dnf upgrade --refresh -y
+sudo reboot
 ```
 
-## TuneD
+Ben bu rehberi `Fedora 42 Workstation` üzerinde hazırladım. GNOME Wayland ile sorunsuz çalışıyor.
 
-Bu makinede `TuneD` ile `TUXEDO Control Center` aynı anda çalışınca CPU governor ve enerji tercihleri tarafında çakışma oluşuyor.
+## 2. Donanımı doğrula
 
-Bu yüzden TCC kullanıyorsan önerilen durum:
+İlk olarak sistemin doğru donanımı gördüğünü kontrol et:
+
+```bash
+cat /sys/devices/virtual/dmi/id/sys_vendor
+cat /sys/devices/virtual/dmi/id/product_name
+lspci -nn | grep -Ei 'vga|3d|display|network|ethernet|wireless'
+```
+
+Bu makinede beklenen temel tablo:
+
+- `MONSTER`
+- `TULPAR T5 V21.5`
+- Intel iGPU
+- NVIDIA RTX 3070 Mobile
+- Intel Wi-Fi
+- Realtek RTL8125 Ethernet
+
+## 3. RPM Fusion depolarını ekle
+
+NVIDIA ve bazı ek paketler için önce RPM Fusion gerekir.
+
+Fedora dökümantasyonundaki standart yöntem:
+
+```bash
+sudo dnf install \
+  https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm \
+  https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm
+```
+
+İstersen ardından tekrar yenile:
+
+```bash
+sudo dnf upgrade --refresh -y
+```
+
+## 4. NVIDIA sürücüsünü kur
+
+Bu modelde en kritik sürücü adımı NVIDIA tarafıdır.
+
+Bu makinede çalışan kurgu:
+
+```bash
+sudo dnf install akmod-nvidia xorg-x11-drv-nvidia xorg-x11-drv-nvidia-cuda
+```
+
+İsteğe bağlı ama faydalı ek paketler:
+
+```bash
+sudo dnf install nvidia-settings xorg-x11-drv-nvidia-power
+```
+
+Kurulumdan sonra yeniden başlat:
+
+```bash
+sudo reboot
+```
+
+Doğrulama:
+
+```bash
+lsmod | grep nvidia
+nvidia-smi
+```
+
+Not:
+
+- Secure Boot açıksa NVIDIA modülü yüklenmeyebilir.
+- Böyle bir durumda ya Secure Boot'u kapatman ya da modül imzalama yoluna gitmen gerekir.
+
+## 5. TUXEDO deposunu ekle
+
+TUXEDO, Fedora için kendi RPM deposunu sağlıyor.
+
+Kolay yol:
+
+```bash
+cd ~/Downloads
+sudo dnf install ./tuxedo-repository*.noarch.rpm
+sudo dnf update
+```
+
+Alternatif terminal yöntemi:
+
+```bash
+sudo dnf config-manager addrepo --from-repofile="https://rpm.tuxedocomputers.com/fedora/tuxedo.repo"
+sudo rpm --import https://rpm.tuxedocomputers.com/fedora/42/0x54840598.pub.asc
+sudo dnf makecache
+```
+
+Kontrol:
+
+```bash
+cat /etc/yum.repos.d/tuxedo.repo
+```
+
+Bu makinede çalışan repo satırı şu mantıktadır:
+
+- `baseurl=https://rpm.tuxedocomputers.com/fedora/42/x86_64/base`
+
+## 6. TUXEDO Control Center ve sürücüleri kur
+
+Kurulum:
+
+```bash
+sudo dnf install tuxedo-control-center
+```
+
+Bu paketle birlikte gerekli bağımlılıklar da gelir. Bu sistemde `tuxedo-drivers` otomatik geldi.
+
+Kontrol:
+
+```bash
+rpm -qa | grep -E 'tuxedo-control-center|tuxedo-drivers'
+systemctl status tccd.service
+lsmod | grep -E 'tuxedo|uniwill|clevo'
+```
+
+Bu makinede beklenen modüller:
+
+- `tuxedo_keyboard`
+- `tuxedo_io`
+- `uniwill_wmi`
+- bazı durumlarda `clevo_wmi`
+
+## 7. TuneD çakışmasını kalıcı kapat
+
+Fedora tarafında `TuneD` ve `tuned-ppd`, TCC ile çakışabiliyor.
+
+Bu modelde tavsiyem:
 
 ```bash
 sudo systemctl mask --now tuned.service tuned-ppd.service
 ```
 
-Doğrulama:
+Kontrol:
 
 ```bash
 systemctl is-enabled tuned.service tuned-ppd.service tccd.service
 systemctl is-active tuned.service tuned-ppd.service tccd.service
 ```
 
-Beklenen çıktı mantığı:
+Beklenen durum:
 
-- `tuned.service`: `masked` ve `inactive`
-- `tuned-ppd.service`: `masked` ve `inactive`
-- `tccd.service`: `enabled` ve `active`
+- `tuned.service`: `masked` / `inactive`
+- `tuned-ppd.service`: `masked` / `inactive`
+- `tccd.service`: `enabled` / `active`
 
-## Fiziksel profil tuşu
+Bu adım çok önemli. Bunu yapmazsan TCC ile TuneD aynı anda güç profili uygulamaya çalışır.
 
-Bu makinede fiziksel profil tuşu Linux'ta doğrudan görülebiliyor.
+## 8. OpenRGB kur
 
-Gözlenen eşleme:
+Klavye RGB ve RGB lightbar için OpenRGB pratik çözüm.
 
-- `Super+Alt+F6`
+Kurulum:
 
-Yani Windows yazılımı olmadan da bu tuşu Linux tarafında kullanabiliyorsun. Yapılan çözüm şuydu:
-
-- tuşu GNOME tarafında yakalamak
-- TCC profilini D-Bus üzerinden değiştiren script çağırmak
-
-Bu repodaki ilgili dosyalar:
-
-- `monster-cycle-tcc-profile`
-- `monster-tcc-profile-manager`
-
-Profil sırası burada tutulur:
-
-- `~/.config/monster-tcc/cycle-order.json`
-
-## RGB cihazlar
-
-Bu kurulumda Linux tarafında görülenler:
-
-- `rgb:kbd_backlight*` üzerinden klavye RGB bölgeleri
-- OpenRGB içinde `Ionico Keyboard`
-- OpenRGB içinde `Ionico Light Bar`
-
-Görünmeyen şey:
-
-- Windows tarafında güç modu göstergesi gibi çalışan ayrı beyaz LED'ler
-
-Yani pratikte Linux tarafında yapılabilen geri bildirim yöntemleri:
-
-- fiziksel profil tuşu ile gerçek profil değişimi
-- masaüstü bildirimi
-- klavye rengi
-- RGB lightbar rengi
-
-Ama bağımsız beyaz gösterge LED'leri için şu an açık bir Linux arayüzü görünmüyor.
-
-## OpenRGB
-
-Bu makinede işe yarayan cihazlar:
-
-- `Ionico Keyboard`
-- `Ionico Light Bar`
+```bash
+sudo dnf install openrgb openrgb-udev-rules
+```
 
 Kontrol:
 
@@ -113,65 +191,164 @@ Kontrol:
 openrgb -l
 ```
 
-OpenRGB arayüzünü sevmiyorsan en mantıklı yaklaşım şudur:
+Bu makinede Linux tarafında görülen cihazlar:
 
-- OpenRGB'yi sadece donanım arka ucu olarak kullan
-- gündelik kullanım için küçük özel arayüzler yaz
+- `Ionico Keyboard`
+- `Ionico Light Bar`
 
-Bu repodaki GTK arayüzü de tam bu mantıkla hazırlanmıştır.
+Not:
 
-## Howdy
+- Windows'taki ayrı beyaz profil gösterge LED'leri Linux'ta görünmüyor.
+- OpenRGB ile görünen cihazlar RGB klavye ve RGB bar ile sınırlı.
 
-Howdy, Linux için Windows Hello benzeri yüz tanıma projesidir.
+## 9. Fiziksel profil tuşu
 
-Resmi proje:
+Bu laptopta profil tuşu Linux'a gerçekten geliyor.
 
-- https://github.com/boltgolt/howdy
+Bizim yakaladığımız eşleme:
 
-Kağıt üstünde Fedora desteği COPR üzerinden anlatılıyor:
+- `Super+Alt+F6`
+
+Yani Windows yazılımı olmadan da bu tuşu kullanabiliyorsun.
+
+Bu repo içindeki araçlar tam olarak bunun için var:
+
+- `scripts/monster-cycle-tcc-profile`
+- `scripts/monster-tcc-profile-manager`
+
+Kurulum:
+
+```bash
+cd ~/monster-linux-toolkit
+./install.sh
+```
+
+Sonra uygulama menüsünden `Monster TCC Profile Manager` açıp profil sırasını ayarlayabilirsin.
+
+## 10. Howdy kur
+
+`Howdy`, Linux için Windows Hello benzeri yüz tanıma projesidir.
+
+Resmi Fedora yolu upstream README içinde COPR üzerinden anlatılıyor:
 
 ```bash
 sudo dnf copr enable principis/howdy
 sudo dnf --refresh install howdy
 ```
 
-Ama Fedora 42 tarafında bunu şu an temiz ve sorunsuz bir çözüm diye önermiyorum.
+Ama Fedora 42 tarafında bu yol uzun süre problemli oldu. Bu makinede çalışan kurulum yolu `howdy-beta` deposu oldu.
 
-Bunun nedeni:
-
-- upstream issue'larda Fedora 42 için bağımlılık kırıkları görülüyor
-- beta paket hattında da sorun raporları var
-- giriş yöneticisi entegrasyonu her masaüstünde aynı kaliteyle çalışmıyor
-
-Pratik önerim:
-
-- Howdy'yi deneysel kabul et
-- önce sadece test et
-- doğrudan giriş ekranına bağlamadan önce `sudo` ile güvenilir çalıştığını doğrula
-- parolayı asla tamamen devre dışı bırakma
-
-Temkinli test akışı:
+Bu sistemde kullanılan repo:
 
 ```bash
-sudo howdy test
-sudo howdy add
-sudo howdy list
+sudo dnf copr remove principis/howdy
+sudo dnf copr enable principis/howdy-beta
+sudo dnf --refresh install howdy
 ```
 
-Bunlar stabil değilse PAM tarafına hiç dokunma.
+Bu makinede kurulu paket örneği:
 
-## Bu model için genel Linux notları
+- `howdy-3.0.0-7.20250714gitd3ab993.fc42.x86_64`
 
-- GNOME Wayland bu araçlar için sorunsuz çalışıyor
-- `TCC + masked TuneD` kombinasyonu, karışık güç yöneticilerinden daha temiz
-- `OpenRGB` arayüz olarak zayıf olsa da donanım arka ucu olarak iş görüyor
-- çalışan ayarları ve scriptleri git ile saklamak çok faydalı
+Kurulumdan sonra önce test et:
 
-## Bu repodaki araçların amacı
+```bash
+sudo howdy version
+sudo howdy add
+sudo howdy list
+sudo howdy test
+```
 
-Bu depo tam olarak şunları çözmek için oluşturuldu:
+Önemli not:
 
-- `Monster Tulpar T5 V21.5` üzerinde Fedora kullanımını rahatlatmak
-- TCC güç profillerini fiziksel tuşla tekrar kullanılır hale getirmek
-- profil sırasını görsel arayüzden düzenlemek
-- bu modelde hangi parçanın Linux'ta gerçekten çalıştığını belgelemek
+- önce sadece `sudo` tarafında test et
+- doğrudan giriş ekranına bağlama
+- parola girişini yedek olarak mutlaka açık bırak
+
+## 11. Howdy yapılandırırken dikkat
+
+Eğer kamera algılanmıyorsa:
+
+```bash
+sudo howdy config
+```
+
+Bakılacak ana ayarlar:
+
+- doğru kamera aygıtı
+- karanlık ortam performansı
+- yüz model sayısı
+
+Eğer `sudo howdy test` stabil değilse PAM giriş yapılarını elleme.
+
+## 12. Wi-Fi ve Ethernet
+
+Bu modelde ek bir özel Wi-Fi kurulumu gerekmedi.
+
+Görülen donanım:
+
+- Intel Wi-Fi
+- Realtek RTL8125 Ethernet
+
+Fedora çekirdeği bu ikisini temel kullanım için gördü.
+
+Kontrol:
+
+```bash
+nmcli device status
+ip -br link
+```
+
+Eğer LAN tarafında sorun yaşarsan önce şuna bak:
+
+```bash
+lspci -nn | grep Ethernet
+```
+
+Ama bu sistemde ekstra bir üçüncü parti Ethernet sürücüsü kurmak gerekmedi.
+
+## 13. Son kontrol listesi
+
+Kurulum sonunda şunları tek tek doğrula:
+
+```bash
+systemctl is-active tccd.service
+systemctl is-active tuned.service tuned-ppd.service
+lsmod | grep nvidia
+lsmod | grep tuxedo
+openrgb -l
+```
+
+Beklenen durum:
+
+- `tccd` aktif
+- `tuned` ve `tuned-ppd` inaktif
+- `nvidia` modülleri yüklü
+- `tuxedo_keyboard` modülü yüklü
+- OpenRGB cihaz listesi geliyor
+
+## 14. Bu repodaki araçların amacı
+
+Bu repo rehber + yardımcı araç deposudur.
+
+Araçlar:
+
+- fiziksel profil tuşuna TCC profil döngüsü bağlar
+- profil sırasını GTK arayüzünden düzenletir
+
+Ama asıl amaç:
+
+- `Monster Tulpar T5 V21.5` için düzgün, sıfırdan kurulum rehberi sunmak
+
+## Kaynaklar
+
+- Fedora Docs, RPM Fusion repository setup:
+  https://docs.fedoraproject.org/quick-docs/rpmfusion-setup/
+- TUXEDO repository and Fedora installation page:
+  https://www.tuxedocomputers.com/en/Add-TUXEDO-software-package-sources.tuxedo
+- Howdy official repository:
+  https://github.com/boltgolt/howdy
+- Howdy Fedora instructions in upstream README:
+  https://github.com/boltgolt/howdy
+- Fedora 42 Howdy packaging issue:
+  https://github.com/boltgolt/howdy/issues/1018
