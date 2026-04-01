@@ -1,15 +1,15 @@
 # Monster Tulpar T5 V21.5 Linux Toolkit
 
-Bu depo, özellikle `MONSTER / TULPAR T5 V21.5` laptopta Fedora Linux kullanırken işime yarayan araçları ve notları içerir.
+Bu depo, `MONSTER / TULPAR T5 V21.5` da spesifik olarak Fedora kullanırken deneyimlediğim sorunlar için kendi çözümlerimi paylaşacağım.
 
-Odak noktası:
+Temel bileşenlerimiz:
 
-- `TUXEDO Control Center` ile güç/fan profilleri
-- `OpenRGB` ile RGB cihazlar
-- fiziksel profil tuşunu Linux'ta tekrar kullanılır hale getirmek
-- bu model için pratik Linux rehberi
+- `TUXEDO Control Center` ile güç/fan kontrolü 
+- `OpenRGB` ile RGB klavye ve lightbarın kontrolü
+- fiziksel profil tuşunu Linux'ta tekrar kullanılır hale getirmek için kendi scriptim
+- windows hello donanımını çalıştırmak için howdy
 
-## Bu repoda ne var
+## Bu repoda kiler:
 
 - `scripts/monster-cycle-tcc-profile`
   TUXEDO Control Center profillerini D-Bus üzerinden sırayla değiştirir.
@@ -26,15 +26,15 @@ Odak noktası:
 
 ## Bu neden gerekli
 
-Bu laptopta fiziksel profil tuşu Linux tarafından görülebiliyor, ama Windows'taki üretici yazılımı davranışı Fedora üzerinde kendiliğinden gelmiyor.
+Bu laptopta fiziksel profil tuşu Linux tarafından görülebiliyor, ama Windows'taki monster control center yazılımı davranışı Fedora üzerinde kendiliğinden gelmiyor.
 
 Bu depodaki araçlar şu işi çözüyor:
 
 - fiziksel profil tuşunu tekrar işe yarar hale getirmek
-- TCC profil sırasını kullanıcı dostu bir arayüzden ayarlamak
+- Guç profillerini fiziksel tuşa ile değiştirme sırasını kullanıcı dostu bir arayüzden ayarlamak
 - kurulumu kullanıcı dizininde, hafif ve sade tutmak
 
-## Gereksinimler
+## Kendi test ortamım
 
 - Fedora Linux
 - GNOME Wayland
