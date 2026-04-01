@@ -1,39 +1,49 @@
-# Monster Linux Toolkit
+# Monster Tulpar T5 V21.5 Linux Toolkit
 
-Utilities and notes for running Fedora Linux on a `Monster Tulpar T5 V21.5` class laptop with TUXEDO components, OpenRGB, and a custom power-profile shortcut workflow.
+Bu depo, özellikle `MONSTER / TULPAR T5 V21.5` laptopta Fedora Linux kullanırken işime yarayan araçları ve notları içerir.
 
-## What is in this repo
+Odak noktası:
+
+- `TUXEDO Control Center` ile güç/fan profilleri
+- `OpenRGB` ile RGB cihazlar
+- fiziksel profil tuşunu Linux'ta tekrar kullanılır hale getirmek
+- bu model için pratik Linux rehberi
+
+## Bu repoda ne var
 
 - `scripts/monster-cycle-tcc-profile`
-  Cycles TUXEDO Control Center profiles through D-Bus.
+  TUXEDO Control Center profillerini D-Bus üzerinden sırayla değiştirir.
 - `scripts/monster-tcc-profile-manager`
-  GTK/libadwaita GUI for editing the cycle order used by the hardware profile key.
+  Fiziksel profil tuşunun dolaştığı profil sırasını düzenlemek için GTK/libadwaita arayüzü.
 - `scripts/monster_tcc_common.py`
-  Shared D-Bus and config logic.
+  Ortak D-Bus ve yapılandırma mantığı.
 - `desktop/monster-tcc-profile-manager.desktop`
-  Desktop launcher.
+  Uygulama menüsü kısayolu.
 - `docs/monster-linux-guide.md`
-  Machine-specific Linux guide, including TCC, OpenRGB, TuneD, and Howdy notes.
+  `Monster Tulpar T5 V21.5` için Linux kullanım rehberi.
 - `install.sh`
-  Installs the scripts and desktop file into the current user's local directories.
+  Scriptleri ve masaüstü dosyasını kullanıcı dizinine kurar.
 
-## Why this exists
+## Bu neden gerekli
 
-This laptop exposes the hardware profile key to Linux as `Super+Alt+F6`, but the vendor software behavior is not reproduced automatically on Fedora. The tools here restore that workflow by:
+Bu laptopta fiziksel profil tuşu Linux tarafından görülebiliyor, ama Windows'taki üretici yazılımı davranışı Fedora üzerinde kendiliğinden gelmiyor.
 
-- binding the hardware key to a TCC profile cycle action
-- providing a GUI to reorder or disable profiles in that cycle
-- keeping the setup lightweight and user-local
+Bu depodaki araçlar şu işi çözüyor:
 
-## Requirements
+- fiziksel profil tuşunu tekrar işe yarar hale getirmek
+- TCC profil sırasını kullanıcı dostu bir arayüzden ayarlamak
+- kurulumu kullanıcı dizininde, hafif ve sade tutmak
 
-- Fedora Linux with GNOME Wayland
-- `tccd` from TUXEDO Control Center running on the system bus
+## Gereksinimler
+
+- Fedora Linux
+- GNOME Wayland
+- çalışan `tccd` servisi
 - `busctl`
 - Python 3
-- GTK 4 and libadwaita Python bindings (`python3-gobject` with GTK4/Adwaita available)
+- GTK 4 / libadwaita Python bağları
 
-## Install
+## Kurulum
 
 ```bash
 git clone https://github.com/beng1z/monster-linux-toolkit.git
@@ -41,22 +51,23 @@ cd monster-linux-toolkit
 ./install.sh
 ```
 
-After install:
+Kurulumdan sonra:
 
-- open `Monster TCC Profile Manager` from the GNOME app grid
-- arrange the order you want
-- save it
-- press the hardware profile key to cycle profiles
+- GNOME uygulama menüsünden `Monster TCC Profile Manager` aç
+- profil sırasını istediğin gibi düzenle
+- kaydet
+- fiziksel profil tuşuna basarak profiller arasında geç
 
-## Notes
+## Notlar
 
-- The current setup is designed around `TUXEDO Control Center` for power/fan profiles and `OpenRGB` for lighting.
-- `TuneD` should stay masked on this machine if you want TCC to own power-profile behavior.
-- The separate white profile-indicator LEDs do not currently appear to be exposed through Linux `sysfs`, `tccd`, or OpenRGB on this hardware. The RGB keyboard and RGB front light bar are visible; the white indicator LEDs are not.
+- Bu kurgu güç/fan tarafında `TUXEDO Control Center`, ışık tarafında `OpenRGB` mantığıyla hazırlanmıştır.
+- Bu makinede `TuneD`, TCC ile çakıştığı için maskelenmiş olmalıdır.
+- Windows'taki ayrı beyaz profil gösterge LED'leri bu donanımda Linux tarafında `sysfs`, `tccd` veya `OpenRGB` üzerinden görünmüyor.
+- Linux'ta görünen RGB cihazlar klavye ve RGB lightbar ile sınırlı.
 
-## Sources
+## Kaynaklar
 
-- Howdy official repository: https://github.com/boltgolt/howdy
-- Fedora 42 Howdy packaging issue: https://github.com/boltgolt/howdy/issues/1018
-- Howdy KDE/SDDM behavior discussion: https://github.com/boltgolt/howdy/issues/843
-- TUXEDO keyboard power-mode LED discussion: https://github.com/tuxedocomputers/tuxedo-keyboard/issues/86
+- Howdy resmi repo: https://github.com/boltgolt/howdy
+- Fedora 42 Howdy paketleme sorunu: https://github.com/boltgolt/howdy/issues/1018
+- Howdy KDE/SDDM davranışı: https://github.com/boltgolt/howdy/issues/843
+- TUXEDO klavye güç modu LED tartışması: https://github.com/tuxedocomputers/tuxedo-keyboard/issues/86

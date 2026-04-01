@@ -1,30 +1,33 @@
-# Monster Tulpar T5 V21.5 Linux Guide
+# Monster Tulpar T5 V21.5 Linux Rehberi
 
-This guide is based on a Fedora setup where the machine identifies itself as:
+Bu rehber doğrudan şu makine üzerinden hazırlanmıştır:
 
-- Vendor: `MONSTER`
-- Product: `TULPAR T5 V21.5`
-- Kernel family observed: Fedora 42 with the `tuxedo_keyboard` stack loaded
+- Üretici: `MONSTER`
+- Model: `TULPAR T5 V21.5`
+- Dağıtım: Fedora
 
-## Recommended stack
+Bu yüzden genel Linux tavsiyesinden çok, bu modelde gerçekten karşıma çıkan pratik durumlara odaklanır.
 
-Use one owner for each subsystem:
+## Önerdiğim genel kurgu
 
-- Power and fans: `TUXEDO Control Center`
-- RGB keyboard and RGB bar: `OpenRGB`
-- Desktop integration and custom behavior: small local scripts
+Her işi tek bir araç yapsın:
 
-Avoid letting multiple power managers fight each other.
+- Güç ve fan: `TUXEDO Control Center`
+- RGB klavye ve RGB bar: `OpenRGB`
+- Özel davranışlar ve entegrasyon: küçük yerel scriptler
+
+Aynı anda iki farklı güç yöneticisinin sistemi çekiştirmesine izin verme.
 
 ## TUXEDO Control Center
 
-Observed on this machine:
+Bu makinede gözlediğim durum:
 
-- `tccd` runs and exposes a D-Bus API on `com.tuxedocomputers.tccd`
-- custom and legacy profiles are readable and switchable from D-Bus
-- the hardware profile key emits `Super+Alt+F6`
+- `tccd` çalışıyor
+- sistem D-Bus üzerinde `com.tuxedocomputers.tccd` arayüzünü açıyor
+- profiller okunabiliyor ve değiştirilebiliyor
+- fiziksel profil tuşu Linux'ta görülüyor
 
-Useful checks:
+Kontrol etmek için:
 
 ```bash
 systemctl is-active tccd.service
@@ -33,106 +36,121 @@ busctl --system introspect com.tuxedocomputers.tccd /com/tuxedocomputers/tccd
 
 ## TuneD
 
-If `TuneD` is active at the same time as TCC, they can fight over CPU governor and energy preferences.
+Bu makinede `TuneD` ile `TUXEDO Control Center` aynı anda çalışınca CPU governor ve enerji tercihleri tarafında çakışma oluşuyor.
 
-Recommended state on this machine when using TCC:
+Bu yüzden TCC kullanıyorsan önerilen durum:
 
 ```bash
 sudo systemctl mask --now tuned.service tuned-ppd.service
 ```
 
-Verify:
+Doğrulama:
 
 ```bash
 systemctl is-enabled tuned.service tuned-ppd.service tccd.service
 systemctl is-active tuned.service tuned-ppd.service tccd.service
 ```
 
-Expected:
+Beklenen çıktı mantığı:
 
-- `tuned.service`: `masked` and `inactive`
-- `tuned-ppd.service`: `masked` and `inactive`
-- `tccd.service`: `enabled` and `active`
+- `tuned.service`: `masked` ve `inactive`
+- `tuned-ppd.service`: `masked` ve `inactive`
+- `tccd.service`: `enabled` ve `active`
 
-## Hardware profile key
+## Fiziksel profil tuşu
 
-On this machine, the hardware profile key is visible to Linux and maps to:
+Bu makinede fiziksel profil tuşu Linux'ta doğrudan görülebiliyor.
+
+Gözlenen eşleme:
 
 - `Super+Alt+F6`
 
-That means you do not need Windows vendor software to detect the key. You can bind it in GNOME and call a script that switches TCC profiles through D-Bus.
+Yani Windows yazılımı olmadan da bu tuşu Linux tarafında kullanabiliyorsun. Yapılan çözüm şuydu:
 
-This repo includes:
+- tuşu GNOME tarafında yakalamak
+- TCC profilini D-Bus üzerinden değiştiren script çağırmak
+
+Bu repodaki ilgili dosyalar:
 
 - `monster-cycle-tcc-profile`
 - `monster-tcc-profile-manager`
 
-The manager writes its cycle order to:
+Profil sırası burada tutulur:
 
 - `~/.config/monster-tcc/cycle-order.json`
 
-## RGB devices
+## RGB cihazlar
 
-What Linux exposed in this setup:
+Bu kurulumda Linux tarafında görülenler:
 
-- keyboard RGB zones through `rgb:kbd_backlight*`
-- OpenRGB `Ionico Keyboard`
-- OpenRGB `Ionico Light Bar`
+- `rgb:kbd_backlight*` üzerinden klavye RGB bölgeleri
+- OpenRGB içinde `Ionico Keyboard`
+- OpenRGB içinde `Ionico Light Bar`
 
-What did not appear to be exposed:
+Görünmeyen şey:
 
-- the separate white profile-indicator LEDs used by the Windows software
+- Windows tarafında güç modu göstergesi gibi çalışan ayrı beyaz LED'ler
 
-So the practical Linux path is:
+Yani pratikte Linux tarafında yapılabilen geri bildirim yöntemleri:
 
-- use the real hardware profile key for mode switching
-- use notifications, keyboard color, or RGB light bar as feedback
+- fiziksel profil tuşu ile gerçek profil değişimi
+- masaüstü bildirimi
+- klavye rengi
+- RGB lightbar rengi
+
+Ama bağımsız beyaz gösterge LED'leri için şu an açık bir Linux arayüzü görünmüyor.
 
 ## OpenRGB
 
-OpenRGB detects these useful devices here:
+Bu makinede işe yarayan cihazlar:
 
 - `Ionico Keyboard`
 - `Ionico Light Bar`
 
-Check:
+Kontrol:
 
 ```bash
 openrgb -l
 ```
 
-If you dislike the stock OpenRGB UI, a better approach is often:
+OpenRGB arayüzünü sevmiyorsan en mantıklı yaklaşım şudur:
 
-- keep OpenRGB only as the device backend
-- build small purpose-specific frontends for the machine
+- OpenRGB'yi sadece donanım arka ucu olarak kullan
+- gündelik kullanım için küçük özel arayüzler yaz
+
+Bu repodaki GTK arayüzü de tam bu mantıkla hazırlanmıştır.
 
 ## Howdy
 
-Howdy is the Windows Hello style face-auth project for Linux.
+Howdy, Linux için Windows Hello benzeri yüz tanıma projesidir.
 
-Official upstream still documents Fedora support through a COPR repo:
+Resmi proje:
+
+- https://github.com/boltgolt/howdy
+
+Kağıt üstünde Fedora desteği COPR üzerinden anlatılıyor:
 
 ```bash
 sudo dnf copr enable principis/howdy
 sudo dnf --refresh install howdy
 ```
 
-But for Fedora 42, this is not a clean recommendation right now.
+Ama Fedora 42 tarafında bunu şu an temiz ve sorunsuz bir çözüm diye önermiyorum.
 
-Current caveats observed from upstream issue tracker:
+Bunun nedeni:
 
-- Fedora 42 packaging has dependency breakage in the stable COPR path
-- beta packages also had unresolved dependency reports
-- GNOME/GDM tends to behave better than KDE for login integration
+- upstream issue'larda Fedora 42 için bağımlılık kırıkları görülüyor
+- beta paket hattında da sorun raporları var
+- giriş yöneticisi entegrasyonu her masaüstünde aynı kaliteyle çalışmıyor
 
-Practical recommendation for Fedora 42 on this laptop:
+Pratik önerim:
 
-- treat Howdy as experimental
-- only enable it after you confirm `sudo howdy test` works reliably
-- do not make it your sole auth path
-- prefer starting with `sudo` integration before touching login PAM stacks
+- Howdy'yi deneysel kabul et
+- önce sadece test et
+- doğrudan giriş ekranına bağlamadan önce `sudo` ile güvenilir çalıştığını doğrula
+- parolayı asla tamamen devre dışı bırakma
 
-Suggested cautious workflow:
+Temkinli test akışı:
 
 ```bash
 sudo howdy test
@@ -140,20 +158,20 @@ sudo howdy add
 sudo howdy list
 ```
 
-Only after that should you review PAM integration for:
+Bunlar stabil değilse PAM tarafına hiç dokunma.
 
-- `sudo`
-- lock screen
-- login manager
+## Bu model için genel Linux notları
 
-Security note:
+- GNOME Wayland bu araçlar için sorunsuz çalışıyor
+- `TCC + masked TuneD` kombinasyonu, karışık güç yöneticilerinden daha temiz
+- `OpenRGB` arayüz olarak zayıf olsa da donanım arka ucu olarak iş görüyor
+- çalışan ayarları ve scriptleri git ile saklamak çok faydalı
 
-- Howdy is convenience, not stronger security than a password
-- keep password auth available
+## Bu repodaki araçların amacı
 
-## General Fedora notes for this machine
+Bu depo tam olarak şunları çözmek için oluşturuldu:
 
-- GNOME Wayland works fine for the custom profile manager GUI
-- TCC plus masked TuneD is a cleaner power-management setup than mixing them
-- OpenRGB is useful as a hardware backend even if its UI is not
-- keep copies of working profile settings and custom scripts in version control
+- `Monster Tulpar T5 V21.5` üzerinde Fedora kullanımını rahatlatmak
+- TCC güç profillerini fiziksel tuşla tekrar kullanılır hale getirmek
+- profil sırasını görsel arayüzden düzenlemek
+- bu modelde hangi parçanın Linux'ta gerçekten çalıştığını belgelemek
